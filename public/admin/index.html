@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 硬件架构师 - 后台管理</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: 'Inter', 'Microsoft YaHei', sans-serif; background: #0a0a0f; }
+        .card { background: #13131c; border: 1px solid #23232f; border-radius: 1rem; }
+        .th { color: #71717a; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+        .nav-item.active { background: #1677ff; color: #fff; }
+        table { border-collapse: collapse; }
+        td, th { padding: 10px 12px; text-align: left; font-size: 13px; }
+        tr { border-bottom: 1px solid #1e1e2a; }
+        input, select, textarea { background: #0d0d14; border: 1px solid #2a2a38; border-radius: 8px; padding: 8px 10px; color: #e4e4e7; font-size: 13px; outline: none; }
+        input:focus, select:focus, textarea:focus { border-color: #1677ff; }
+        .btn { background: #1677ff; color: #fff; font-weight: 700; padding: 8px 14px; border-radius: 8px; font-size: 13px; cursor: pointer; border: none; }
+        .btn:hover { background: #4096ff; }
+        .btn-sm { padding: 4px 10px; font-size: 12px; border-radius: 6px; }
+        .btn-danger { background: #dc2626; } .btn-danger:hover { background: #ef4444; }
+        .btn-dark { background: #23232f; color: #d4d4d8; } .btn-dark:hover { background: #2e2e3d; }
+        .btn-green { background: #16a34a; } .btn-green:hover { background: #22c55e; }
+        pre.json-view { background: #0d0d14; border: 1px solid #23232f; border-radius: 8px; padding: 14px; font-size: 12px; overflow: auto; max-height: 50vh; color: #38bdf8; }
+        .chat-bubble-user { background: linear-gradient(135deg,#1677ff,#06b6d4); color:#fff; border-radius: 12px 12px 4px 12px; }
+        .chat-bubble-ai { background: #1e1e2a; color:#d4d4d8; border-radius: 12px 12px 12px 4px; }
+    </style>
+</head>
+<body class="text-gray-200 min-h-screen">
+
+    <!-- ==================== 登录 ==================== -->
+    <div id="login-view" class="min-h-screen flex items-center justify-center p-6">
+        <div class="card p-8 w-full max-w-sm">
+            <div class="text-center mb-8">
+                <div class="w-16 h-16 mx-auto bg-gradient-to-tr from-indigo-700 to-cyan-600 rounded-2xl flex items-center justify-center border border-gray-700 mb-4">
+                    <i class="fa-solid fa-microchip text-3xl text-white"></i>
+                </div>
+                <h1 class="text-2xl font-black">AI 硬件架构师 · 后台</h1>
+                <p class="text-xs text-gray-500 mt-2">Blueprint.clone 全栈版 · 管理控制台</p>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label class="text-xs text-gray-500 font-bold block mb-1.5">管理员账号</label>
+                    <input type="text" id="adm-user" class="w-full" value="admin" placeholder="admin">
+                </div>
+                <div>
+                    <label class="text-xs text-gray-500 font-bold block mb-1.5">密码</label>
+                    <input type="password" id="adm-pass" class="w-full" placeholder="••••••••" onkeypress="if(event.key==='Enter')adminLogin()">
+                </div>
+                <button onclick="adminLogin()" class="btn w-full py-3 text-base">登录后台</button>
+                <p class="text-[11px] text-gray-600 text-center">默认账号 admin / admin123<br>登录后请尽快修改密码</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== 主界面 ==================== -->
+    <div id="app-view" class="hidden h-screen flex">
+
+        <!-- 侧边栏 -->
+        <aside class="w-52 shrink-0 bg-[#0d0d14] border-r border-[#1e1e2a] flex flex-col">
+            <div class="p-4 border-b border-[#1e1e2a] flex items-center gap-2">
+                <i class="fa-solid fa-microchip text-cyan-500 text-xl"></i>
+                <div>
+                    <div class="font-black text-sm">硬件架构师</div>
+                    <div class="text-[10px] text-gray-600">ADMIN CONSOLE</div>
+                </div>
+            </div>
+            <nav class="flex-1 overflow-y-auto p-2 space-y-1" id="nav">
+                <button class="nav-item w-full text-left px-3 py-2.5 rounded-lg text-sm font-bold text-gray-400 hover:bg-[#1a1a26]" data-page="dashboard"><i class="fa-solid fa-gauge-high w-5"></i> 数据看板</button>
+                <button class="nav-item w-full text-left px-3 py-2.5 rounded-lg text-sm font-bold text-gray-400 hover:bg-[#1a1a26]" data-page="history"><i class="fa-solid fa-clock-rotate-left w-5"></i> 历史记录</button>
+                <button class="nav-item w-full text-left px-3 py-2.5 rounded-lg text-sm font-bold text-gray-400 hover:bg-[#1a1a26]" data-page="settings"><i class="fa-solid fa-gears w-5"></i> 系统设置</button>
+                <button class="nav-item w-full text-left px-3 py-2.5 rounded-lg text-sm font-bold text-gray-400 hover:bg-[#1a1a26]" data-page="logs"><i class="fa-solid fa-list w-5"></i> 操作日志</button>
+            </nav>
+            <div class="p-3 border-t border-[#1e1e2a] space-y-2">
+                <button onclick="openPasswordModal()" class="w-full text-xs text-gray-400 hover:text-white py-1.5 rounded bg-[#1a1a26] font-bold"><i class="fa-solid fa-key"></i> 修改密码</button>
+                <button onclick="adminLogout()" class="w-full text-xs text-red-400 hover:text-red-300 py-1.5 rounded bg-[#1a1a26] font-bold"><i class="fa-solid fa-right-from-bracket"></i> 退出登录</button>
+            </div>
+        </aside>
+
+        <!-- 主内容 -->
+        <main class="flex-1 overflow-y-auto p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h1 class="text-xl font-black" id="page-title">数据看板</h1>
+                <div class="flex items-center gap-2 text-xs text-gray-500">
+                    <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                    <span id="admin-name">admin</span>
+                </div>
+            </div>
+
+            <!-- 数据看板 -->
+            <section id="page-dashboard" class="page space-y-6">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="stat-cards"></div>
+                <div class="card p-5">
+                    <h3 class="font-black text-sm mb-4 text-gray-400">最近生成</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead><tr class="th"><th>#</th><th>项目名称</th><th>生成时间</th><th>操作</th></tr></thead>
+                            <tbody id="recent-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 历史记录 -->
+            <section id="page-history" class="page hidden space-y-4">
+                <div class="card p-4 flex gap-3 items-center flex-wrap">
+                    <input id="his-search" placeholder="搜索项目名称" class="flex-1 max-w-xs" onkeypress="if(event.key==='Enter')loadHistory(1)">
+                    <button onclick="loadHistory(1)" class="btn btn-sm">搜索</button>
+                    <span class="text-xs text-gray-500" id="his-count"></span>
+                    <div class="ml-auto flex gap-2">
+                        <button onclick="historyPage(-1)" class="btn btn-sm btn-dark">上一页</button>
+                        <span class="text-xs text-gray-500 self-center" id="his-page">1</span>
+                        <button onclick="historyPage(1)" class="btn btn-sm btn-dark">下一页</button>
+                    </div>
+                </div>
+                <div class="card overflow-x-auto">
+                    <table class="w-full">
+                        <thead><tr class="th"><th>#</th><th>项目名称</th><th>生成时间</th><th>接线节点</th><th>BOM 项</th><th>预估成本</th><th>操作</th></tr></thead>
+                        <tbody id="history-tbody"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- 系统设置 -->
+            <section id="page-settings" class="page hidden">
+                <div class="card p-6 max-w-xl space-y-4">
+                    <div>
+                        <label class="text-xs text-gray-500 font-bold block mb-1.5">站点名称</label>
+                        <input id="set-site-title" class="w-full">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500 font-bold block mb-1.5">站点副标题</label>
+                        <input id="set-site-desc" class="w-full">
+                    </div>
+                    <button onclick="saveSettings()" class="btn">保存设置</button>
+                    <span id="set-msg" class="text-xs text-green-500"></span>
+                </div>
+            </section>
+
+            <!-- 操作日志 -->
+            <section id="page-logs" class="page hidden">
+                <div class="card overflow-x-auto">
+                    <table class="w-full">
+                        <thead><tr class="th"><th>#</th><th>类型</th><th>详情</th><th>时间</th></tr></thead>
+                        <tbody id="logs-tbody"></tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- ==================== 详情弹窗 ==================== -->
+    <div id="detail-modal" class="hidden fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-6">
+        <div class="card w-full max-w-3xl max-h-[85vh] flex flex-col">
+            <div class="p-5 border-b border-[#1e1e2a] flex justify-between items-center">
+                <div>
+                    <h3 class="font-black" id="detail-title">项目详情</h3>
+                    <p class="text-xs text-gray-500 mt-1" id="detail-sub"></p>
+                </div>
+                <button onclick="closeDetail()" class="text-gray-500 hover:text-white text-xl">&times;</button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-5 space-y-5">
+                <div>
+                    <h4 class="text-xs font-black text-gray-500 mb-2">💬 对话记录</h4>
+                    <div id="detail-chat" class="space-y-3"></div>
+                </div>
+                <div>
+                    <h4 class="text-xs font-black text-gray-500 mb-2">📦 生成数据 (JSON)</h4>
+                    <pre class="json-view" id="detail-json"></pre>
+                </div>
+            </div>
+            <div class="p-4 border-t border-[#1e1e2a] flex justify-end gap-2">
+                <button onclick="closeDetail()" class="btn btn-sm btn-dark">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== 修改密码弹窗 ==================== -->
+    <div id="password-modal" class="hidden fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-6">
+        <div class="card p-6 w-full max-w-sm space-y-4">
+            <h3 class="font-black text-lg">修改密码</h3>
+            <div>
+                <label class="text-xs text-gray-500 font-bold block mb-1.5">原密码</label>
+                <input type="password" id="pw-old" class="w-full">
+            </div>
+            <div>
+                <label class="text-xs text-gray-500 font-bold block mb-1.5">新密码 (至少 6 位)</label>
+                <input type="password" id="pw-new" class="w-full">
+            </div>
+            <p id="pw-msg" class="text-xs text-red-400"></p>
+            <div class="flex justify-end gap-2">
+                <button onclick="closePasswordModal()" class="btn btn-sm btn-dark">取消</button>
+                <button onclick="submitPassword()" class="btn btn-sm">确认修改</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+// ============================================================
+// 后台逻辑（原生 JS，Bearer token 存 localStorage）
+// ============================================================
+const TOKEN_KEY = 'bp-admin-token';
+let token = localStorage.getItem(TOKEN_KEY) || '';
+let currentPage = 1;
+const PAGE_SIZE = 15;
+
+async function api(path, body, method = 'GET') {
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers.Authorization = 'Bearer ' + token;
+    const res = await fetch('/api/admin' + path, {
+        method, headers, body: body ? JSON.stringify(body) : undefined
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 401) { localStorage.removeItem(TOKEN_KEY); token = ''; showLogin(); throw new Error(data.error || '未登录'); }
+    if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    return data;
+}
+
+const fmtTime = (ts) => new Date(ts).toLocaleString('zh-CN');
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// ---------- 视图切换 ----------
+function showLogin() {
+    document.getElementById('login-view').classList.remove('hidden');
+    document.getElementById('app-view').classList.add('hidden');
+}
+function showApp(username) {
+    document.getElementById('login-view').classList.add('hidden');
+    document.getElementById('app-view').classList.remove('hidden');
+    document.getElementById('admin-name').textContent = username;
+    switchPage('dashboard');
+}
+
+async function adminLogin() {
+    const username = document.getElementById('adm-user').value.trim();
+    const password = document.getElementById('adm-pass').value;
+    try {
+        const d = await (async () => {
+            const res = await fetch('/api/admin/login', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || '登录失败');
+            return data;
+        })();
+        token = d.token;
+        localStorage.setItem(TOKEN_KEY, token);
+        showApp(d.username);
+    } catch (e) { alert(e.message); }
+}
+
+async function adminLogout() {
+    try { await api('/logout', {}, 'POST'); } catch {}
+    localStorage.removeItem(TOKEN_KEY); token = '';
+    showLogin();
+}
+
+// ---------- 页面导航 ----------
+const PAGE_TITLES = { dashboard: '数据看板', history: '历史记录', settings: '系统设置', logs: '操作日志' };
+function switchPage(page) {
+    document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
+    document.getElementById('page-' + page).classList.remove('hidden');
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.page === page));
+    document.getElementById('page-title').textContent = PAGE_TITLES[page] || '';
+    if (page === 'dashboard') loadStats();
+    if (page === 'history') loadHistory(1);
+    if (page === 'settings') loadSettings();
+    if (page === 'logs') loadLogs();
+}
+document.querySelectorAll('.nav-item').forEach(n => n.addEventListener('click', () => switchPage(n.dataset.page)));
+
+// ---------- 数据看板 ----------
+async function loadStats() {
+    const d = await api('/stats');
+    const cards = [
+        { label: '总生成项目', value: d.totalProjects, icon: 'fa-microchip', color: 'text-cyan-400' },
+        { label: '今日生成', value: d.projectsToday, icon: 'fa-bolt', color: 'text-yellow-400' },
+        { label: 'BOM 项目成本合计', value: '¥' + d.bomTotal, icon: 'fa-sack-dollar', color: 'text-green-400' },
+        { label: '平均项目成本', value: '¥' + d.bomAvg, icon: 'fa-calculator', color: 'text-blue-400' },
+    ];
+    document.getElementById('stat-cards').innerHTML = cards.map(c => `
+        <div class="card p-5 flex items-center gap-4">
+            <i class="fa-solid ${c.icon} text-2xl ${c.color}"></i>
+            <div><div class="text-2xl font-black">${c.value}</div><div class="text-xs text-gray-500 mt-1">${c.label}</div></div>
+        </div>`).join('');
+    document.getElementById('recent-tbody').innerHTML = d.recent.length === 0
+        ? '<tr><td colspan="4" class="text-center text-gray-600 py-6">暂无数据</td></tr>'
+        : d.recent.map(r => `
+            <tr>
+                <td class="text-gray-500">#${r.id}</td>
+                <td class="font-bold">${esc(r.project_name)}</td>
+                <td class="text-gray-500">${esc(r.date)}</td>
+                <td><button onclick="openDetail(${r.id})" class="btn btn-sm btn-dark">查看</button></td>
+            </tr>`).join('');
+}
+
+// ---------- 历史记录 ----------
+async function loadHistory(page) {
+    if (!page) page = currentPage;
+    const q = document.getElementById('his-search').value.trim();
+    const d = await api('/history', { q, limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE }, 'POST');
+    currentPage = page;
+    const totalPages = Math.max(1, Math.ceil(d.total / PAGE_SIZE));
+    document.getElementById('his-page').textContent = `${page} / ${totalPages}`;
+    document.getElementById('his-count').textContent = `共 ${d.total} 条`;
+    document.getElementById('history-tbody').innerHTML = d.history.length === 0
+        ? '<tr><td colspan="7" class="text-center text-gray-600 py-6">暂无记录</td></tr>'
+        : d.history.map(r => `
+            <tr>
+                <td class="text-gray-500">#${r.id}</td>
+                <td class="font-bold">${esc(r.project_name)}</td>
+                <td class="text-gray-500">${esc(r.date)}</td>
+                <td>${r.nodes}</td>
+                <td>${r.bomItems}</td>
+                <td class="text-yellow-400 font-bold">${r.cost !== null ? '¥' + r.cost : '-'}</td>
+                <td class="space-x-2">
+                    <button onclick="openDetail(${r.id})" class="btn btn-sm btn-dark">查看</button>
+                    <button onclick="deleteHistory(${r.id})" class="btn btn-sm btn-danger">删除</button>
+                </td>
+            </tr>`).join('');
+}
+function historyPage(dir) {
+    const next = currentPage + dir;
+    if (next < 1) return;
+    loadHistory(next);
+}
+async function deleteHistory(id) {
+    if (!confirm('确定删除这条生成记录吗？删除后前台历史列表也会同步移除。')) return;
+    try {
+        await api('/history/' + id, {}, 'POST');
+        loadHistory(currentPage);
+    } catch (e) { alert(e.message); }
+}
+
+// ---------- 详情弹窗 ----------
+async function openDetail(id) {
+    const d = await api('/history/' + id);
+    const it = d.item;
+    document.getElementById('detail-title').textContent = it.project_name;
+    document.getElementById('detail-sub').textContent = `#${it.id} · ${it.date} · ${it.nodes} 节点 · ${it.bomItems} 个 BOM 项`;
+    document.getElementById('detail-chat').innerHTML = (it.messages || []).map(m => `
+        <div class="flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}">
+            <div class="max-w-[80%] px-4 py-2 text-sm ${m.role === 'user' ? 'chat-bubble-user' : 'chat-bubble-ai'}">${esc(m.content)}</div>
+        </div>`).join('');
+    document.getElementById('detail-json').textContent = JSON.stringify(it.parsed_data, null, 2);
+    document.getElementById('detail-modal').classList.remove('hidden');
+}
+function closeDetail() { document.getElementById('detail-modal').classList.add('hidden'); }
+document.getElementById('detail-modal').addEventListener('click', e => { if (e.target.id === 'detail-modal') closeDetail(); });
+
+// ---------- 系统设置 ----------
+async function loadSettings() {
+    const d = await api('/settings');
+    document.getElementById('set-site-title').value = d.settings.site_title || '';
+    document.getElementById('set-site-desc').value = d.settings.site_desc || '';
+}
+async function saveSettings() {
+    try {
+        await api('/settings', {
+            settings: {
+                site_title: document.getElementById('set-site-title').value.trim(),
+                site_desc: document.getElementById('set-site-desc').value.trim(),
+            }
+        }, 'POST');
+        document.getElementById('set-msg').textContent = '✅ 已保存';
+        setTimeout(() => document.getElementById('set-msg').textContent = '', 2000);
+    } catch (e) { alert(e.message); }
+}
+
+// ---------- 操作日志 ----------
+async function loadLogs() {
+    const d = await api('/logs', { limit: 100 }, 'POST');
+    document.getElementById('logs-tbody').innerHTML = d.logs.length === 0
+        ? '<tr><td colspan="4" class="text-center text-gray-600 py-6">暂无日志</td></tr>'
+        : d.logs.map(l => `
+            <tr>
+                <td class="text-gray-500">#${l.id}</td>
+                <td><span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#1e1e2a] text-gray-300">${esc(l.type)}</span></td>
+                <td class="text-gray-400">${esc(l.detail)}</td>
+                <td class="text-gray-500">${fmtTime(l.ts)}</td>
+            </tr>`).join('');
+}
+
+// ---------- 修改密码 ----------
+function openPasswordModal() { document.getElementById('password-modal').classList.remove('hidden'); }
+function closePasswordModal() { document.getElementById('password-modal').classList.add('hidden'); document.getElementById('pw-msg').textContent = ''; }
+async function submitPassword() {
+    const oldPw = document.getElementById('pw-old').value;
+    const newPw = document.getElementById('pw-new').value;
+    try {
+        const d = await api('/password', { old: oldPw, new_: newPw }, 'POST');
+        document.getElementById('pw-msg').textContent = '✅ ' + (d.msg || '密码已修改');
+        document.getElementById('pw-old').value = '';
+        document.getElementById('pw-new').value = '';
+        setTimeout(closePasswordModal, 1200);
+    } catch (e) {
+        document.getElementById('pw-msg').textContent = '❌ ' + e.message;
+    }
+}
+
+// ---------- 启动 ----------
+(async () => {
+    if (!token) return;
+    try {
+        const d = await api('/stats');
+        showApp(localStorage.getItem('bp-admin-name') || 'admin');
+    } catch { /* 未登录或 token 过期 */ }
+})();
+</script>
+</body>
+</html>

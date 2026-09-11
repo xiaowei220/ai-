@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blueprint.clone - AI 硬件架构师</title>
+
+    <!-- 加载 React -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- 加载 Babel 以在浏览器中编译 JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- 加载 Three.js 3D渲染库 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- 初始化 Tailwind CSS 配置 -->
+    <script>
+        window.tailwind = window.tailwind || {};
+        window.tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['JetBrains Mono', 'monospace'] },
+                    animation: { 'spin-slow': 'spin 10s linear infinite' }
+                }
+            }
+        };
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+        
+        body { margin: 0; padding: 0; background-color: #fafcff; font-family: 'Inter', sans-serif; overflow: hidden; }
+        
+        .bg-mesh {
+            background-color: #f8fafc;
+            background-image: radial-gradient(at 40% 20%, hsla(228,100%,74%,0.15) 0px, transparent 50%),
+                              radial-gradient(at 80% 0%, hsla(189,100%,56%,0.15) 0px, transparent 50%),
+                              radial-gradient(at 0% 50%, hsla(355,100%,93%,0.15) 0px, transparent 50%);
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+        }
+        .glass-sidebar {
+            background: linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.6) 100%);
+            backdrop-filter: blur(20px);
+        }
+
+        .dot-matrix {
+            background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+        
+        .fade-in { animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* 新增：电流流动动画 */
+        .wire-flow { stroke-dasharray: 8 8; animation: wireFlow 1s linear infinite; }
+        @keyframes wireFlow { to { stroke-dashoffset: -16; } }
+
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="bg-mesh">
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // --- 1. 图标库 (Icons) ---
+        const Icons = {
+            Settings: ({ className }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
+            Book: ({ className }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>,
+            Zap: ({ className }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>,
+            Send: ({ className }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>,
+            Box: ({ className }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>,
+            Package: ({ className }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>,
+            Code: ({ className }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>,
+            Loader: ({ className }) => <svg className={`${className} animate-spin`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>,
+            Check: ({ className }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>,
+            User: ({ className }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>,
+            Bot: ({ className }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>,
+            ShoppingCart: ({ className }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 0a2 2 0 100 4 2 2 0 000-4z" /></svg>,
+            Clock: ({ className }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+            Trash: ({ className }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>,
+            Download: ({ className }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>,
+            Save: ({ className }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>,
+            Copy: ({ className }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+        };
+
+        // --- 2. 模拟数据 ---
+        const MOCK_AI_RESPONSE = {
+            project_name: "智能植物监护与自动浇水仪",
+            description: "基于 ESP32 的物联网环境监测及水泵控制系统。",
+            circuit: {
+                nodes: [
+                    { id: "mcu", name: "ESP32 DevKit", type: "Microcontroller", x: 300, y: 150, w: 120, h: 220, color: "#1e293b", pins: [{id: "3v3", label: "3V3", rx: 10, ry: 20}, {id: "gnd", label: "GND", rx: 10, ry: 45}, {id: "d4", label: "D4", rx: 10, ry: 70}, {id: "d5", label: "D5", rx: 10, ry: 95}] },
+                    { id: "sensor1", name: "DHT11 温湿度", type: "Sensor", x: 50, y: 50, w: 90, h: 60, color: "#0ea5e9", pins: [{id: "vcc", label: "VCC", rx: 80, ry: 15}, {id: "data", label: "DATA", rx: 80, ry: 30}, {id: "gnd", label: "GND", rx: 80, ry: 45}] },
+                    { id: "sensor2", name: "土壤湿度", type: "Sensor", x: 50, y: 200, w: 90, h: 80, color: "#eab308", pins: [{id: "vcc", label: "VCC", rx: 80, ry: 20}, {id: "gnd", label: "GND", rx: 80, ry: 40}, {id: "a0", label: "A0", rx: 80, ry: 60}] },
+                    { id: "relay", name: "5V 继电器模块", type: "Module", x: 550, y: 100, w: 100, h: 80, color: "#ef4444", pins: [{id: "vcc", label: "VCC", rx: 10, ry: 20}, {id: "gnd", label: "GND", rx: 10, ry: 40}, {id: "in", label: "IN", rx: 10, ry: 60}, {id: "out1", label: "COM", rx: 90, ry: 30}, {id: "out2", label: "NO", rx: 90, ry: 50}] },
+                    { id: "pump", name: "微型潜水泵", type: "Actuator", x: 750, y: 120, w: 90, h: 80, color: "#64748b", pins: [{id: "pos", label: "+", rx: 10, ry: 30}, {id: "neg", label: "-", rx: 10, ry: 50}] }
+                ],
+                edges: [
+                    { id: "e1", from: "mcu", fromPin: "3v3", to: "sensor1", toPin: "vcc", color: "#ef4444" },
+                    { id: "e2", from: "mcu", fromPin: "gnd", to: "sensor1", toPin: "gnd", color: "#111827" },
+                    { id: "e3", from: "mcu", fromPin: "d4", to: "sensor1", toPin: "data", color: "#eab308" },
+                    { id: "e4", from: "mcu", fromPin: "3v3", to: "sensor2", toPin: "vcc", color: "#ef4444" },
+                    { id: "e5", from: "mcu", fromPin: "gnd", to: "sensor2", toPin: "gnd", color: "#111827" },
+                    { id: "e6", from: "mcu", fromPin: "d5", to: "sensor2", toPin: "a0", color: "#3b82f6" },
+                    { id: "e7", from: "mcu", fromPin: "3v3", to: "relay", toPin: "vcc", color: "#ef4444" },
+                    { id: "e8", from: "mcu", fromPin: "gnd", to: "relay", toPin: "gnd", color: "#111827" },
+                    { id: "e10", from: "relay", fromPin: "out1", to: "pump", toPin: "pos", color: "#ef4444" },
+                    { id: "e11", from: "mcu", fromPin: "gnd", to: "pump", toPin: "neg", color: "#111827" }
+                ]
+            },
+            bom: {
+                items: [
+                    { name: "ESP32 开发板", quantity: 1, description: "支持 WiFi/BLE，主控", estimated_price: "25.00" },
+                    { name: "DHT11 模块", quantity: 1, description: "带底板数字温湿度传感器", estimated_price: "5.50" },
+                    { name: "防腐蚀土壤湿度传感器", quantity: 1, description: "电容式，更耐用", estimated_price: "8.00" },
+                    { name: "5V 单路继电器模块", quantity: 1, description: "用于弱电控制强电水泵", estimated_price: "3.20" },
+                    { name: "5V 微型潜水泵", quantity: 1, description: "带一段透明水管", estimated_price: "12.00" }
+                ],
+                total_estimated_price: "53.70"
+            },
+            guide: "### 🛠️ 新手保姆级组装与使用说明书\n\n#### 一、 准备阶段：必须用到什么工具？\n- **十字小号螺丝刀**：用于将导线固定在继电器的接线端子上（必须拧紧，防止大电流打火）。\n- **指甲剪或专用剥线钳**：用来剥开潜水泵末端的电线绝缘外皮，露出约 5mm 的铜丝。\n- **数字万用表（进阶推荐）**：系统组装完不通电，打到【蜂鸣档】，红黑表笔测线路是否短路。\n- **绝缘电工胶布**：裸露的铜线对绞后，必须用胶布死死缠住，防水防短路。\n\n#### 二、 傻瓜式组装步骤\n1. **主控安家**：将 ESP32 开发板插在面包板的正中间，注意两侧至少留出一排插孔用于插线。\n2. **传感器供电与信号**：\n   - 用杜邦线将 DHT11 的 `VCC` 接到面包板的 `3V3` 供电轨，`GND` 接地轨，`DATA` 针脚插在 ESP32 的 `D4` 旁边。\n   - 同样方法，土壤湿度传感器的 `A0` 信号脚接到 `D5`。\n3. **连接继电器（核心步骤）**：将继电器的 `VCC` 接 `5V` 或 `3V3`，`GND` 接地，控制信号 `IN` 接 ESP32 的引脚。\n4. **强电/水泵隔离连接（⚠️极度危险，看仔细）**：\n   - 绝对不能把水泵直接连到 ESP32 上！\n   - 把水泵电源线的**黑线（负极）**跟系统的 `GND` 连通。\n   - 把水泵电源线的**红线（正极）**剪断，一头插进继电器的 `COM（公共端）`，另一头插进 `NO（常开端）`。继电器就像一个物理开关，帮你控制红线的通断。\n\n#### 三、 仪器检测与使用寿命揭秘\n- **土壤湿度传感器探头老化**：普通的“叉子型”电阻式传感器长时间插在泥土里通电，极易发生电解腐蚀，寿命通常**不到 2 个月**就会生锈失效。**进阶方案**：购买“电容式”土壤传感器，表面覆盖防腐绝缘层，寿命长达 2-3 年。\n- **继电器寿命**：机械继电器大约有 10 万次吸合寿命。如果听到系统发出清脆的“吧嗒”声但水泵没转，用万用表测 `COM` 和 `NO` 导通情况，若不导通说明内部触点烧结，需更换模块。\n\n#### 四、 小白必看：如何保证 100% 成功避坑！💡\n- 🔌 **千万别用电脑 USB 供电带动水泵！** 水泵启动瞬间电流极大（可能超 1A），电脑 USB 口过载保护会直接让 ESP32 不停重启。**解决办法**：找一个旧手机充电头（5V/2A），剪开 USB 线给系统单独供电。\n- 💧 **主板防水**：水泵丢水盆里没关系，但 ESP32 沾水秒烧！建议买个外卖塑料盒把主板倒扣在里面，线从边缘穿出。\n- 🐛 **代码上传失败？** 按下 ESP32 板子上的 `BOOT` 按钮不松，当出现 Connecting... 进度条时再松手，即可成功烧录固件代码。",
+            firmware_code: "// 自动生成的 ESP32 智能浇水系统基础固件\n\n#define DHT_PIN 4\n#define SOIL_PIN 5\n#define RELAY_PIN 15\n\nvoid setup() {\n  Serial.begin(115200);\n  pinMode(RELAY_PIN, OUTPUT);\n  digitalWrite(RELAY_PIN, LOW);\n  Serial.println(\"系统初始化完成\");\n}\n\nvoid loop() {\n  int soilMoisture = analogRead(SOIL_PIN);\n  // 阈值测试：低于 1000 说明土壤干燥\n  if (soilMoisture < 1000) {\n    Serial.println(\"土壤干燥，开始浇水...\");\n    digitalWrite(RELAY_PIN, HIGH); // 开启水泵\n    delay(5000);                   // 浇水5秒\n    digitalWrite(RELAY_PIN, LOW);  // 关闭水泵\n  }\n  delay(2000); // 监测间隔\n}"
+        };
+
+        // --- 3. 稳健的 JSON 提取与解析辅助函数 ---
+        const extractAndParseJSON = (rawText) => {
+            if (!rawText) return null;
+            try {
+                return JSON.parse(rawText);
+            } catch (e) {
+                // 尝试匹配 markdown 代码块 ```json ... ```
+                const match = rawText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+                if (match && match[1]) {
+                    try { return JSON.parse(match[1]); } catch (err) {}
+                }
+                // 尝试查找第一个 '{' 和最后一个 '}'
+                const first = rawText.indexOf('{');
+                const last = rawText.lastIndexOf('}');
+                if (first !== -1 && last !== -1 && last > first) {
+                    try { return JSON.parse(rawText.substring(first, last + 1)); } catch (err) {}
+                }
+                return null;
+            }
+        };
+
+        // --- 4. 实物接线图组件 ---
+        const CircuitDiagram = ({ data }) => {
+            if (!data || !data.nodes) return <div className="flex h-full items-center justify-center text-slate-400 fade-in font-medium">等待 AI 生成硬件架构图...</div>;
+
+            const drawWire = (startX, startY, endX, endY) => {
+                const midX = (startX + endX) / 2;
+                return `M ${startX} ${startY} C ${midX + 40} ${startY}, ${midX - 40} ${endY}, ${endX} ${endY}`;
+            };
+
+            return (
+                <div className="w-full h-full bg-white/50 relative overflow-auto fade-in dot-matrix">
+                    <svg className="w-full h-full min-h-[700px] min-w-[900px]">
+                        <defs>
+                            <filter id="drop-shadow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feDropShadow dx="2" dy="6" stdDeviation="4" floodOpacity="0.15" />
+                            </filter>
+                            <filter id="wire-shadow">
+                                <feDropShadow dx="0" dy="2" stdDeviation="2" floodOpacity="0.2" />
+                            </filter>
+                        </defs>
+                        
+                        {data.edges && data.edges.map(edge => {
+                            const fromNode = data.nodes.find(n => n.id === edge.from);
+                            const toNode = data.nodes.find(n => n.id === edge.to);
+                            if (!fromNode || !toNode) return null;
+                            
+                            const fromPin = fromNode.pins?.find(p => p.id === edge.fromPin) || {rx: 0, ry: 0};
+                            const toPin = toNode.pins?.find(p => p.id === edge.toPin) || {rx: 0, ry: 0};
+
+                            return (
+                                <g key={edge.id}>
+                                    <path 
+                                        d={drawWire(fromNode.x + fromPin.rx, fromNode.y + fromPin.ry, toNode.x + toPin.rx, toNode.y + toPin.ry)}
+                                        fill="none" 
+                                        stroke={edge.color || "#64748b"} 
+                                        strokeWidth="3.5"
+                                        filter="url(#wire-shadow)"
+                                        className="opacity-90 hover:opacity-100 transition-all cursor-pointer"
+                                    />
+                                    {/* 叠加层：流动电荷动画效果 */}
+                                    <path 
+                                        d={drawWire(fromNode.x + fromPin.rx, fromNode.y + fromPin.ry, toNode.x + toPin.rx, toNode.y + toPin.ry)}
+                                        fill="none" 
+                                        stroke="rgba(255,255,255,0.7)" 
+                                        strokeWidth="1.5"
+                                        className="wire-flow pointer-events-none"
+                                    />
+                                </g>
+                            );
+                        })}
+
+                        {data.nodes.map(node => (
+                            <g key={node.id} transform={`translate(${node.x}, ${node.y})`} filter="url(#drop-shadow)">
+                                <rect width={node.w || 100} height={node.h || 60} rx="8" fill={node.color || "#166534"} stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
+                                {node.type === 'Microcontroller' && <rect x="30" y="40" width="60" height="140" rx="4" fill="#0f172a" />}
+                                <text x={(node.w||100)/2} y="18" textAnchor="middle" fill="#f8fafc" fontSize="12" fontWeight="700" fontFamily="JetBrains Mono">{node.name}</text>
+                                {node.pins && node.pins.map(pin => (
+                                    <g key={pin.id} transform={`translate(${pin.rx}, ${pin.ry})`}>
+                                        <rect x="-4.5" y="-4.5" width="9" height="9" rx="1.5" fill="#fbbf24" stroke="#d97706" strokeWidth="0.5" />
+                                        <circle cx="0" cy="0" r="2.5" fill="#1e293b" />
+                                        <text x={pin.rx < (node.w||100)/2 ? 12 : -12} y="4" textAnchor={pin.rx < (node.w||100)/2 ? "start" : "end"} fill="#f8fafc" fontSize="9" fontWeight="600" fontFamily="JetBrains Mono">{pin.label}</text>
+                                    </g>
+                                ))}
+                            </g>
+                        ))}
+                    </svg>
+                    
+                    <div className="absolute bottom-6 left-6 bg-white/95 backdrop-blur-md px-5 py-3 rounded-2xl shadow-xl text-xs font-semibold text-slate-600 border border-white/60 space-y-2">
+                        <div className="flex items-center gap-3"><span className="w-5 h-1.5 rounded-full bg-red-500 block"></span> VCC (供电)</div>
+                        <div className="flex items-center gap-3"><span className="w-5 h-1.5 rounded-full bg-slate-900 block"></span> GND (接地)</div>
+                        <div className="flex items-center gap-3"><span className="w-5 h-1.5 rounded-full bg-yellow-400 block"></span> 数据/信号</div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- 5. BOM 表格组件 ---
+        const BOMTable = ({ data }) => {
+            if (!data || !data.items) return <div className="flex h-full items-center justify-center text-slate-400 fade-in font-medium">等待 AI 生成物料清单...</div>;
+
+            const handleShop = (platform, keyword) => {
+                const urls = {
+                    taobao: `https://s.taobao.com/search?q=${encodeURIComponent(keyword)}`,
+                    pdd: `https://mobile.yangkeduo.com/search_result.html?search_key=${encodeURIComponent(keyword)}`
+                };
+                window.open(urls[platform], '_blank');
+            };
+
+            const exportCSV = () => {
+                const headers = ['元器件名称', '数量', '规格描述', '预估单价(¥)'];
+                const csvContent = [
+                    headers.join(','),
+                    ...data.items.map(item => `"${item.name}",${item.quantity},"${item.description}",${item.estimated_price}`)
+                ].join('\n');
+                // \uFEFF 解决 Excel 打开 CSV 时的中文乱码问题
+                const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = `BOM_清单.csv`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            };
+
+            return (
+                <div className="w-full h-full bg-white/40 flex flex-col fade-in relative">
+                    <div className="flex justify-between items-center px-6 py-3 border-b bg-white/60 backdrop-blur-md sticky top-0 z-20">
+                        <span className="font-bold text-slate-700 text-sm">采购清单详情</span>
+                        <button onClick={exportCSV} className="flex items-center space-x-1.5 bg-white border shadow-sm px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-indigo-600 hover:border-indigo-200 transition-all">
+                            <Icons.Download className="w-3.5 h-3.5" /> <span>导出 CSV</span>
+                        </button>
+                    </div>
+                    <div className="flex-1 overflow-auto px-2 pb-24">
+                        <table className="w-full text-left border-collapse">
+                            <thead className="text-xs uppercase tracking-widest text-slate-500 sticky top-0 z-10 bg-white/90 backdrop-blur">
+                                <tr>
+                                    <th className="px-6 py-4 font-semibold border-b border-slate-200">元器件名称</th>
+                                    <th className="px-6 py-4 font-semibold border-b border-slate-200 text-center">数量</th>
+                                    <th className="px-6 py-4 font-semibold border-b border-slate-200">规格描述</th>
+                                    <th className="px-6 py-4 font-semibold border-b border-slate-200 text-right">预估单价(¥)</th>
+                                    <th className="px-6 py-4 font-semibold border-b border-slate-200 text-center">一键采购</th>
+                                </tr>
+                            </thead>
+                            <tbody className="text-sm">
+                                {data.items.map((item, index) => (
+                                    <tr key={index} className="border-b border-slate-100 hover:bg-white/60 transition-colors">
+                                        <td className="px-6 py-4 font-bold text-slate-800">{item.name}</td>
+                                        <td className="px-6 py-4 text-center">
+                                            <span className="bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-md text-xs font-black">x{item.quantity}</span>
+                                        </td>
+                                        <td className="px-6 py-4 text-slate-600">{item.description}</td>
+                                        <td className="px-6 py-4 text-right font-mono text-slate-700 font-semibold">{item.estimated_price}</td>
+                                        <td className="px-6 py-4 text-center space-x-2">
+                                            <button onClick={() => handleShop('taobao', item.name)} className="bg-orange-500 hover:bg-orange-600 text-white text-xs px-3 py-1.5 rounded-lg shadow-sm font-semibold transition-colors">淘宝</button>
+                                            <button onClick={() => handleShop('pdd', item.name)} className="bg-red-500 hover:bg-red-600 text-white text-xs px-3 py-1.5 rounded-lg shadow-sm font-semibold transition-colors">拼多多</button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div className="m-6 p-5 bg-white/85 backdrop-blur-xl border border-white shadow-xl rounded-2xl flex justify-end items-center absolute bottom-0 right-0 left-0">
+                        <span className="text-slate-500 mr-4 font-semibold text-sm">预估总成本</span>
+                        <span className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-cyan-500 font-mono">¥ {data.total_estimated_price}</span>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- 6. 居中渲染的 3D PCB 模型组件 (增强版：带分解、标签、PCB铜皮走线与Gerber导出) ---
+        const Model3D = ({ data }) => {
+            const mountRef = useRef(null);
+            const [isExploded, setIsExploded] = useState(false);
+            const [isTopView, setIsTopView] = useState(false);
+            const sceneState = useRef({ components: [], labels: [] });
+            const cameraRef = useRef(null);
+
+            // 导出嘉立创 EasyEDA 格式网表
+            const exportToJLCPCB = () => {
+                if (!data || !data.nodes) return;
+                const jlcpcbData = {
+                    metadata: { title: data.project_name || "Blueprint Export", tool: "Blueprint.clone to EasyEDA", version: "1.0.0" },
+                    components: data.nodes.map(n => ({
+                        designator: n.id,
+                        footprint: n.type === 'Microcontroller' ? 'ESP32-WROOM-32' : 'SIP-3',
+                        x: n.x, y: n.y, name: n.name
+                    })),
+                    nets: data.edges?.map(e => ({ name: `NET_${e.from}_${e.to}`, pins: [`${e.from}-${e.fromPin}`, `${e.to}-${e.toPin}`] })) || []
+                };
+                const blob = new Blob([JSON.stringify(jlcpcbData, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `${data.project_name || 'pcb'}_jlcpcb_easyeda.json`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
+            // 导出标准 Gerber 打板文件 (模拟 RS-274X 格式)
+            const exportGerber = () => {
+                if (!data || !data.nodes) return;
+                // 模拟生成标准的 Gerber RS-274X 顶层铜皮坐标格式
+                const gerber = `%FSLAX26Y26*%\n%MOIN*%\n%ADD10C,0.0100*%\nG04 Blueprint AI Generated Gerber Top Layer *\n` +
+                    data.nodes.map(n => `X${Math.round(n.x * 100)}Y${Math.round(n.y * 100)}D03*`).join('\n') +
+                    `\nM02*\n`;
+                const blob = new Blob([gerber], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `${data.project_name || 'pcb'}_TopCopper.gbr`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            };
+
+            // 创建 3D 文字标签的辅助函数
+            const makeTextSprite = (message) => {
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                context.font = "Bold 28px Inter, sans-serif";
+                const metrics = context.measureText(message);
+                const textWidth = metrics.width;
+                canvas.width = textWidth + 30;
+                canvas.height = 50;
+                context.fillStyle = "rgba(15, 23, 42, 0.85)"; // 暗色背景
+                context.beginPath();
+                context.roundRect(0, 0, canvas.width, canvas.height, 8);
+                context.fill();
+                context.fillStyle = "#38bdf8"; // 亮蓝色文字
+                context.fillText(message, 15, 35);
+                const texture = new THREE.CanvasTexture(canvas);
+                const spriteMaterial = new THREE.SpriteMaterial({ map: texture, depthTest: false });
+                const sprite = new THREE.Sprite(spriteMaterial);
+                sprite.scale.set(canvas.width / 40, canvas.height / 40, 1);
+                return sprite;
+            };
+
+            useEffect(() => {
+                if (!window.THREE || !mountRef.current) return;
+                
+                const scene = new THREE.Scene();
+                scene.background = new THREE.Color('#0f172a'); // 深蓝科技背景
+                
+                // 默认初始化宽高 (防 0x0 报错)
+                let initialWidth = mountRef.current.clientWidth || 800;
+                let initialHeight = mountRef.current.clientHeight || 600;
+
+                const camera = new THREE.PerspectiveCamera(45, initialWidth / initialHeight, 0.1, 1000);
+                camera.position.set(0, 10, 12);
+                camera.lookAt(0, 0, 0); // 完美居中
+                cameraRef.current = camera;
+                
+                const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                renderer.setSize(initialWidth, initialHeight);
+                renderer.shadowMap.enabled = true;
+                renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                
+                // 清理重新挂载时的旧 Canvas
+                while(mountRef.current.firstChild) {
+                    mountRef.current.removeChild(mountRef.current.firstChild);
+                }
+                mountRef.current.appendChild(renderer.domElement);
+                
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                scene.add(ambientLight);
+                const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                dirLight.position.set(5, 12, 5);
+                dirLight.castShadow = true;
+                scene.add(dirLight);
+
+                const group = new THREE.Group();
+                scene.add(group);
+
+                // 1. 真实沉金工艺 PCB 绿板底座
+                const boardGeo = new THREE.BoxGeometry(10, 0.2, 7);
+                const boardMat = new THREE.MeshStandardMaterial({ 
+                    color: 0x0b4520, // 工业阻焊墨绿色
+                    roughness: 0.6,
+                    metalness: 0.2
+                });
+                const board = new THREE.Mesh(boardGeo, boardMat);
+                board.receiveShadow = true;
+                group.add(board);
+
+                // 2. 绘制真实的 PCB 表面铜皮走线 (Circuit Traces)
+                if (data && data.edges) {
+                    const traceMat = new THREE.LineBasicMaterial({ color: 0xd97706, linewidth: 3 }); // 铜色走线
+                    data.edges.forEach(edge => {
+                        const fromNode = data.nodes.find(n => n.id === edge.from);
+                        const toNode = data.nodes.find(n => n.id === edge.to);
+                        if(fromNode && toNode) {
+                            const fx = ((fromNode.x + 50) / 800) * 10 - 5;
+                            const fz = ((fromNode.y + 50) / 600) * 7 - 3.5;
+                            const tx = ((toNode.x + 50) / 800) * 10 - 5;
+                            const tz = ((toNode.y + 50) / 600) * 7 - 3.5;
+
+                            const points = [];
+                            points.push(new THREE.Vector3(fx, 0.11, fz));
+                            // L型正交布线算法，符合真实的工业 PCB 走线规则
+                            points.push(new THREE.Vector3(fx, 0.11, tz));
+                            points.push(new THREE.Vector3(tx, 0.11, tz));
+
+                            const traceGeo = new THREE.BufferGeometry().setFromPoints(points);
+                            const traceLine = new THREE.Line(traceGeo, traceMat);
+                            group.add(traceLine);
+                        }
+                    });
+                }
+
+                sceneState.current.components = [];
+                sceneState.current.labels = [];
+
+                // 3. 摆放元器件和焊盘
+                if (data && data.nodes) {
+                    data.nodes.forEach((node) => {
+                        const x = ((node.x + 50) / 800) * 10 - 5;
+                        const z = ((node.y + 50) / 600) * 7 - 3.5;
+                        const isMCU = node.type === 'Microcontroller';
+                        const w = isMCU ? 2 : 1.2;
+                        const d = isMCU ? 3 : 1.2;
+                        
+                        // 沉金焊盘
+                        const padGeo = new THREE.BoxGeometry(w + 0.1, 0.05, d + 0.1);
+                        const padMat = new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 1.0, roughness: 0.2 });
+                        const pad = new THREE.Mesh(padGeo, padMat);
+                        pad.position.set(x, 0.12, z);
+                        group.add(pad);
+
+                        // 元器件本体
+                        const compGeo = new THREE.BoxGeometry(w, 0.4, d);
+                        const compMat = new THREE.MeshStandardMaterial({ 
+                            color: node.color ? parseInt(node.color.replace('#', '0x')) : 0x1e293b,
+                            roughness: 0.8
+                        });
+                        const comp = new THREE.Mesh(compGeo, compMat);
+                        comp.position.set(x, 0.3, z);
+                        comp.castShadow = true;
+                        
+                        comp.userData = { normalY: 0.3, explodedY: 2.5 };
+                        group.add(comp);
+                        sceneState.current.components.push(comp);
+
+                        // 3D 浮空文字标签
+                        const label = makeTextSprite(node.name);
+                        label.position.set(x, 0.3 + 1, z);
+                        label.material.opacity = 0; // 默认隐藏
+                        group.add(label);
+                        sceneState.current.labels.push({ sprite: label, comp: comp });
+                    });
+                }
+
+                // 底部参考网格
+                const gridHelper = new THREE.GridHelper(20, 20, 0x334155, 0x1e293b);
+                gridHelper.position.y = -0.5;
+                scene.add(gridHelper);
+
+                // 解决切换 Tab 时 Canvas 宽高为 0 的 Bug
+                const resizeObserver = new ResizeObserver(entries => {
+                    if (!mountRef.current) return;
+                    for (let entry of entries) {
+                        const { width, height } = entry.contentRect;
+                        if (width > 0 && height > 0) {
+                            camera.aspect = width / height;
+                            camera.updateProjectionMatrix();
+                            renderer.setSize(width, height);
+                        }
+                    }
+                });
+                resizeObserver.observe(mountRef.current);
+
+                let isDragging = false;
+                let prevMouse = { x: 0, y: 0 };
+                
+                const onMouseDown = () => { isDragging = true; };
+                const onMouseUp = () => { isDragging = false; };
+                const onMouseMove = (e) => {
+                    if (isDragging) {
+                        group.rotation.y += (e.offsetX - prevMouse.x) * 0.01;
+                        group.rotation.x += (e.offsetY - prevMouse.y) * 0.01;
+                    }
+                    prevMouse = { x: e.offsetX, y: e.offsetY };
+                };
+
+                const dom = mountRef.current;
+                dom.addEventListener('mousedown', onMouseDown);
+                window.addEventListener('mouseup', onMouseUp);
+                dom.addEventListener('mousemove', onMouseMove);
+
+                let reqId;
+                const animate = () => {
+                    reqId = requestAnimationFrame(animate);
+                    if (!isDragging) group.rotation.y += 0.002; // 缓慢自转
+
+                    // 处理分解动画与标签显隐
+                    const currentIsExploded = sceneState.current.isExploded;
+                    sceneState.current.components.forEach(comp => {
+                        const targetY = currentIsExploded ? comp.userData.explodedY : comp.userData.normalY;
+                        comp.position.y += (targetY - comp.position.y) * 0.1; // 缓动效果
+                    });
+                    
+                    sceneState.current.labels.forEach(l => {
+                        l.sprite.position.y = l.comp.position.y + (currentIsExploded ? 0.8 : 0);
+                        const targetOpacity = currentIsExploded ? 1 : 0;
+                        l.sprite.material.opacity += (targetOpacity - l.sprite.material.opacity) * 0.1;
+                    });
+
+                    // 切换 2D/3D 视角动画
+                    if (cameraRef.current) {
+                        const targetY = sceneState.current.isTopView ? 15 : 10;
+                        const targetZ = sceneState.current.isTopView ? 0.1 : 12;
+                        cameraRef.current.position.y += (targetY - cameraRef.current.position.y) * 0.05;
+                        cameraRef.current.position.z += (targetZ - cameraRef.current.position.z) * 0.05;
+                        cameraRef.current.lookAt(0, 0, 0);
+                    }
+
+                    renderer.render(scene, camera);
+                };
+                animate();
+
+                return () => {
+                    cancelAnimationFrame(reqId);
+                    resizeObserver.disconnect();
+                    dom.removeEventListener('mousedown', onMouseDown);
+                    window.removeEventListener('mouseup', onMouseUp);
+                    dom.removeEventListener('mousemove', onMouseMove);
+                    if (dom && renderer.domElement) dom.removeChild(renderer.domElement);
+                    renderer.dispose();
+                };
+            }, [data]);
+
+            // 同步状态到 useRef 供动画循环读取
+            useEffect(() => { sceneState.current.isExploded = isExploded; }, [isExploded]);
+            useEffect(() => { sceneState.current.isTopView = isTopView; }, [isTopView]);
+
+            return (
+                <div className="w-full h-full relative fade-in bg-slate-900 overflow-hidden">
+                    <div ref={mountRef} className="absolute inset-0 w-full h-full cursor-move" />
+                    
+                    {/* 左上角提示 */}
+                    <div className="absolute top-4 left-4 bg-slate-800/80 backdrop-blur text-white text-xs px-3 py-2 rounded-lg border border-slate-700 pointer-events-none flex items-center shadow-lg z-10">
+                        <Icons.Box className="w-4 h-4 mr-2 text-blue-400" /> 提示：按住鼠标左键可 360° 旋转，右侧可导出 Gerber 文件
+                    </div>
+
+                    {/* 右侧悬浮操作栏 */}
+                    <div className="absolute top-4 right-4 flex flex-col space-y-3 z-10">
+                        <button 
+                            onClick={() => setIsTopView(!isTopView)} 
+                            className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl border font-bold text-xs transition-all shadow-lg backdrop-blur-md ${isTopView ? 'bg-amber-600 border-amber-500 text-white' : 'bg-slate-800/80 border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white'}`}
+                        >
+                            <Icons.Code className="w-4 h-4" /> 
+                            <span>{isTopView ? '恢复 3D 透视' : '2D 平面顶视图 (PCB图)'}</span>
+                        </button>
+
+                        <button 
+                            onClick={() => setIsExploded(!isExploded)} 
+                            className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl border font-bold text-xs transition-all shadow-lg backdrop-blur-md ${isExploded ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-800/80 border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white'}`}
+                        >
+                            <Icons.Package className="w-4 h-4" /> 
+                            <span>{isExploded ? '合拢元器件' : '爆炸图分解零件'}</span>
+                        </button>
+
+                        <button 
+                            onClick={exportToJLCPCB}
+                            className="flex items-center space-x-2 px-4 py-2.5 rounded-xl border border-emerald-600/50 bg-emerald-900/40 hover:bg-emerald-600 text-emerald-400 hover:text-white font-bold text-xs transition-all shadow-lg backdrop-blur-md"
+                        >
+                            <Icons.Save className="w-4 h-4" /> 
+                            <span>导入嘉立创 EDA</span>
+                        </button>
+
+                        <button 
+                            onClick={exportGerber}
+                            className="flex items-center space-x-2 px-4 py-2.5 rounded-xl border border-blue-600/50 bg-blue-900/40 hover:bg-blue-600 text-blue-400 hover:text-white font-bold text-xs transition-all shadow-lg backdrop-blur-md"
+                        >
+                            <Icons.Download className="w-4 h-4" /> 
+                            <span>下载 Gerber 文件</span>
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- 7. 设置与历史弹窗 ---
+        const PROVIDERS = [
+            { id: 'deepseek', name: '1. 深度求索 DeepSeek', url: 'https://api.deepseek.com/v1', model: 'deepseek-chat', hint: '高性价比，推荐。' },
+            { id: 'zhipu', name: '2. 智谱 GLM', url: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4', hint: '国内领先模型。' },
+            { id: 'siliconflow', name: '3. 硅基流动 SiliconFlow', url: 'https://api.siliconflow.cn/v1', model: 'deepseek-ai/DeepSeek-Coder-V2-Instruct', hint: '开源模型API。' },
+            { id: 'ollama', name: '4. Ollama 本地模型', url: 'http://localhost:11434/v1', model: 'llama3', hint: '本地运行，需允许跨域。' },
+            { id: 'agnes', name: '5. Agnes AI', url: 'https://api.agnes.ai/v1', model: 'gpt-4o', hint: '聚合代理。' },
+            { id: 'gemini', name: '6. Google Gemini', url: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-1.5-pro', hint: 'OpenAI兼容端点。' },
+            { id: 'openai', name: '7. OpenAI', url: 'https://api.openai.com/v1', model: 'gpt-4o', hint: '行业标杆。' },
+            { id: 'anthropic', name: '8. Anthropic Claude', url: 'https://api.anthropic.com/v1', model: 'claude-3-5-sonnet-20240620', hint: '最强代码能力。' },
+            { id: 'custom', name: '9. 自定义 OpenAI 兼容', url: '', model: '', hint: '支持中转代理。' }
+        ];
+
+        const SettingsModal = ({ isOpen, onClose, settings, setSettings }) => {
+            if (!isOpen) return null;
+            const [local, setLocal] = useState(settings);
+            const [saved, setSaved] = useState(false);
+
+            const handleProviderChange = (e) => {
+                const p = PROVIDERS.find(x => x.id === e.target.value);
+                if(p) setLocal({ ...local, provider: p.id, baseUrl: p.url, model: p.model });
+            };
+
+            const handleSave = () => {
+                setSettings(local);
+                setSaved(true);
+                setTimeout(() => { setSaved(false); onClose(); }, 1000);
+            };
+
+            const currentP = PROVIDERS.find(x => x.id === local.provider);
+
+            return (
+                <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-md z-50 flex items-center justify-center p-4">
+                    <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl border border-white w-full max-w-lg p-8 relative fade-in">
+                        <button onClick={onClose} className="absolute top-6 right-6 text-slate-400 hover:text-slate-800 p-2 rounded-full"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+                        <div className="flex items-center mb-6">
+                            <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mr-4 shadow-sm"><Icons.Settings className="w-5 h-5 text-indigo-600"/></div>
+                            <h2 className="text-2xl font-bold text-slate-800">模型与 API 设置</h2>
+                        </div>
+                        <div className="space-y-4 text-left">
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-1">服务商 (Provider)</label>
+                                <select value={local.provider} onChange={handleProviderChange} className="w-full border rounded-xl p-3 bg-slate-50 outline-none text-slate-700 font-medium">
+                                    {PROVIDERS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-1">模型名称 (Model)</label>
+                                <input type="text" value={local.model} onChange={e=>setLocal({...local, model: e.target.value})} className="w-full border rounded-xl p-3 bg-slate-50 font-mono text-sm" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-1">API 密钥 (API Key)</label>
+                                <input type="password" placeholder="留空则使用内置模拟数据完美演示" value={local.apiKey} onChange={e=>setLocal({...local, apiKey: e.target.value})} className="w-full border rounded-xl p-3 bg-slate-50 font-mono text-sm" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-1">接口地址 (Base URL)</label>
+                                <input type="text" value={local.baseUrl} onChange={e=>setLocal({...local, baseUrl: e.target.value})} className="w-full border rounded-xl p-3 bg-slate-50 font-mono text-sm" />
+                            </div>
+                            {currentP && currentP.hint && <div className="bg-indigo-50 p-3 rounded-xl text-xs text-indigo-800">💡 {currentP.hint}</div>}
+                        </div>
+                        <div className="mt-8 flex justify-end items-center">
+                            {saved && <span className="text-emerald-500 text-sm font-semibold mr-4 flex items-center"><Icons.Check className="w-4 h-4 mr-1"/> 已生效</span>}
+                            <button onClick={handleSave} className="bg-gradient-to-r from-indigo-600 to-cyan-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-indigo-600/20">保存并应用</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const HistoryModal = ({ isOpen, onClose, history, onLoad, onDelete }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-md z-50 flex items-center justify-center p-4">
+                    <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl border border-white w-full max-w-xl max-h-[75vh] flex flex-col relative fade-in">
+                        <div className="p-6 border-b flex justify-between items-center">
+                            <div className="flex items-center"><Icons.Clock className="w-6 h-6 text-indigo-600 mr-3"/><h2 className="text-xl font-bold text-slate-800">历史生成记录</h2></div>
+                            <button onClick={onClose} className="text-slate-400 hover:text-slate-800 p-2 rounded-full"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-6 space-y-3">
+                            {history.length === 0 ? <div className="text-center text-slate-400 py-10 font-medium">暂无历史记录，快去生成你的第一个硬件项目吧！</div> :
+                                history.map(item => (
+                                    <div key={item.id} className="flex items-center justify-between p-4 rounded-2xl border bg-slate-50 hover:bg-white hover:shadow-md transition-all group">
+                                        <div className="flex-1 cursor-pointer" onClick={() => onLoad(item)}>
+                                            <h3 className="font-bold text-slate-800">{item.projectName}</h3>
+                                            <div className="text-xs text-slate-500 mt-1">{item.date}</div>
+                                        </div>
+                                        <button onClick={(e) => { e.stopPropagation(); onDelete(item.id); }} className="p-2 text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"><Icons.Trash className="w-5 h-5"/></button>
+                                    </div>
+                                ))
+                            }
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- 新增：7.5 AI 视频与语音解说组件 ---
+        const TutorialVideo = ({ projectData }) => {
+            const [isPlaying, setIsPlaying] = useState(false);
+            const videoRef = useRef(null);
+
+            const handleTogglePlay = () => {
+                if (isPlaying) {
+                    setIsPlaying(false);
+                    window.speechSynthesis.cancel();
+                    if (videoRef.current) videoRef.current.pause();
+                } else {
+                    setIsPlaying(true);
+                    
+                    window.speechSynthesis.cancel();
+                    const introText = projectData?.project_name 
+                        ? `您好，欢迎观看 ${projectData.project_name} 的AI组装指导演示。第一步，请固定好主控板，切勿带电操作。第二步，请严格按照左侧连线图纸，核对引脚正负极。具体细节请仔细阅读文字说明书。` 
+                        : '欢迎观看智能硬件组装演示，请按照图纸规范接线，注意用电安全。';
+                    
+                    const utterance = new SpeechSynthesisUtterance(introText);
+                    utterance.lang = 'zh-CN';
+                    utterance.rate = 1.0;
+                    utterance.onend = () => { 
+                        setIsPlaying(false); 
+                    };
+                    window.speechSynthesis.speak(utterance);
+                }
+            };
+
+            useEffect(() => {
+                return () => window.speechSynthesis.cancel();
+            }, []);
+
+            return (
+                <div onClick={handleTogglePlay} className="group relative w-full h-52 bg-slate-900 rounded-2xl overflow-hidden shadow-lg cursor-pointer border-2 border-slate-200 hover:border-indigo-400 transition-all duration-300">
+                    <video 
+                        ref={videoRef} 
+                        autoPlay 
+                        muted 
+                        loop 
+                        playsInline 
+                        className={`w-full h-full object-cover transition-opacity duration-500 ${isPlaying ? 'opacity-100' : 'opacity-70 group-hover:opacity-90'}`}
+                    >
+                        {/* 使用稳定可靠的电子焊接实拍视频源 */}
+                        <source src="https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-man-soldering-electronic-components-41584-large.mp4" type="video/mp4" />
+                    </video>
+                    
+                    {!isPlaying && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                            <div className="relative flex items-center justify-center">
+                                <div className="animate-ping absolute inline-flex h-16 w-16 rounded-full bg-red-400 opacity-40"></div>
+                                <div className="relative w-16 h-16 bg-red-600/90 backdrop-blur-md rounded-full flex items-center justify-center border-2 border-white/80 group-hover:scale-110 transition-transform duration-300 shadow-2xl">
+                                    <svg className="w-8 h-8 text-white ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {isPlaying && (
+                        <div className="absolute top-3 left-3 flex items-center space-x-2 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full text-white text-xs font-bold border border-white/20 shadow-lg pointer-events-none">
+                            <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></span>
+                            <span>AI 语音讲解与实拍播放中... (点击暂停)</span>
+                        </div>
+                    )}
+
+                    <div className="absolute bottom-3 left-3 right-3 flex justify-between items-center text-xs text-white font-medium pointer-events-none">
+                        <span className="bg-black/60 px-2.5 py-1 rounded-md backdrop-blur">电烙铁焊接与芯片组装实况</span>
+                        <span className="bg-red-600 px-2 py-1 rounded-md font-bold">{isPlaying ? 'Playing' : '▶ 03:15'}</span>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- 8. 主应用 ---
+        const App = () => {
+            const [settings, setSettings] = useState({ provider: 'deepseek', model: 'deepseek-chat', apiKey: '', baseUrl: 'https://api.deepseek.com/v1' });
+            const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+            const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+            const [activeTab, setActiveTab] = useState('circuit');
+            
+            // 历史记录从服务器数据库加载（替代原 localStorage）
+            const [history, setHistory] = useState([]);
+            useEffect(() => {
+                fetch('/api/history')
+                    .then(r => r.json())
+                    .then(d => { if (d.ok && Array.isArray(d.history)) setHistory(d.history); })
+                    .catch(err => console.error('加载历史记录失败:', err));
+            }, []);
+
+            const [input, setInput] = useState('');
+            const [messages, setMessages] = useState([]);
+            const [isLoading, setIsLoading] = useState(false);
+            const [parsedData, setParsedData] = useState(null);
+            const [copySuccess, setCopySuccess] = useState(false);
+            const chatEndRef = useRef(null);
+
+            useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, isLoading]);
+
+            const handleCopyCode = (text) => {
+                const textArea = document.createElement("textarea");
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    setCopySuccess(true);
+                    setTimeout(() => setCopySuccess(false), 2000);
+                } catch (err) {}
+                document.body.removeChild(textArea);
+            };
+
+            const saveHistory = async (data, msgs) => {
+                const newItem = { date: new Date().toLocaleString(), projectName: data.project_name || '智能硬件项目', messages: msgs, parsedData: data };
+                try {
+                    const res = await fetch('/api/history', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(newItem)
+                    });
+                    const d = await res.json();
+                    if (d.ok && d.item) setHistory(prev => [d.item, ...prev]);
+                    else console.error('保存历史失败:', d.error);
+                } catch (err) {
+                    console.error('保存历史失败:', err);
+                }
+            };
+
+            const exportProjectJSON = () => {
+                if (!parsedData) return;
+                const blob = new Blob([JSON.stringify(parsedData, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `${parsedData.project_name || 'blueprint_project'}.json`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                if (!input.trim() || isLoading) return;
+
+                const userMsg = { role: 'user', content: input };
+                const currentMsgs = [...messages, userMsg];
+                setMessages(currentMsgs);
+                setInput('');
+                setIsLoading(true);
+                setParsedData(null);
+
+                // 免 API 模拟体验
+                if (!settings.apiKey) {
+                    setTimeout(() => {
+                        const finalMsgs = [...currentMsgs, { role: 'assistant', content: '✓ 硬件架构拓扑及 3D PCB 参数生成成功！' }];
+                        setMessages(finalMsgs);
+                        setParsedData(MOCK_AI_RESPONSE);
+                        saveHistory(MOCK_AI_RESPONSE, finalMsgs);
+                        setIsLoading(false);
+                    }, 1200);
+                    return;
+                }
+
+                // 真实 API 模式
+                try {
+                    const response = await fetch(`${settings.baseUrl}/chat/completions`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.apiKey}` },
+                        body: JSON.stringify({
+                            model: settings.model,
+                            // 开启强制 JSON 模式 (大多数 OpenAI 兼容接口如 DeepSeek, Agnes 均支持此参数)
+                            response_format: { type: "json_object" },
+                            messages: [
+                                { 
+                                    role: 'system', 
+                                    content: `你是顶尖硬件专家。你必须且只能输出合法的 JSON 对象，绝对不能包含任何 markdown 标记(如 \`\`\`json)、不能有任何前言后语。
+严格输出以下 JSON 结构：
+{
+  "project_name": "项目名",
+  "description": "描述",
+  "circuit": {
+    "nodes": [{"id":"mcu","name":"ESP32","type":"Microcontroller","x":300,"y":150,"w":120,"h":220,"color":"#1e293b","pins":[{"id":"gnd","label":"GND","rx":10,"ry":20}]}],
+    "edges": [{"id":"e1","from":"mcu","fromPin":"gnd","to":"sensor1","toPin":"gnd","color":"#111827"}]
+  },
+  "bom": {
+    "items": [{"name":"名称","quantity":1,"description":"描述","estimated_price":"10.00"}],
+    "total_estimated_price": "10.00"
+  },
+  "firmware_code": "// 你的C++代码",
+  "guide": "Markdown格式的新手保姆级说明书。必须极其详细，涵盖：1.所需工具 2.傻瓜式组装步骤 3.仪器检测与使用寿命 4.新手成功避坑指南"
+}
+外设包括传感器、执行器必须在 circuit.nodes 中一一对应出现，不可遗漏！` 
+                                }, 
+                                userMsg
+                            ],
+                            temperature: 0.1 // 极低的温度，减少模型发散，保证 JSON 格式稳定性
+                        })
+                    });
+                    
+                    if(!response.ok) {
+                        if (response.status === 429) {
+                            throw new Error(`请求过快或 API 账户余额不足 (HTTP 429)。\n\n💡 解决方案：\n1. 请稍等片刻后再试。\n2. 检查您在服务商处的账户余额。\n3. 【推荐】点击右上角设置，清空 API Key，即可立即体验永久免费的「完美模拟模式」！`);
+                        } else if (response.status === 401) {
+                            throw new Error(`API 密钥无效或未授权 (HTTP 401)。\n\n💡 请检查右上角设置中的 API Key 是否填写正确。`);
+                        }
+                        throw new Error(`HTTP Error: ${response.status}`);
+                    }
+                    
+                    const raw = await response.json();
+                    const aiText = raw.choices[0].message.content;
+                    
+                    const data = extractAndParseJSON(aiText);
+
+                    const finalMsgs = [...currentMsgs, { role: 'assistant', content: data ? '✓ 电路设计生成成功。' : aiText }];
+                    setMessages(finalMsgs);
+                    if (data) {
+                        setParsedData(data);
+                        saveHistory(data, finalMsgs);
+                    }
+                } catch(err) {
+                    setMessages(prev => [...prev, { role: 'assistant', content: `❌ 请求失败: ${err.message}` }]);
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            return (
+                <div className="flex flex-col h-screen w-full relative">
+                    <header className="glass-panel border-b px-6 py-4 flex items-center justify-between z-30 sticky top-0 shadow-sm">
+                        <div className="flex items-center space-x-3">
+                            <div className="bg-gradient-to-br from-indigo-600 to-cyan-500 p-2 rounded-xl text-white shadow-md"><Icons.Box className="w-5 h-5" /></div>
+                            <span className="font-extrabold text-2xl tracking-tight text-slate-800">Blueprint<span className="text-indigo-600">.clone</span></span>
+                            <span className="text-xs font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-3 py-1 rounded-full ml-2">Pro Workspace</span>
+                        </div>
+                        <div className="flex items-center space-x-3">
+                            {parsedData && (
+                                <button onClick={exportProjectJSON} className="flex items-center space-x-2 bg-indigo-50 border border-indigo-100 text-indigo-600 px-4 py-2 rounded-xl hover:bg-indigo-100 transition-all shadow-sm fade-in">
+                                    <Icons.Save className="w-4 h-4" />
+                                    <span className="text-sm font-semibold">保存项目 (.json)</span>
+                                </button>
+                            )}
+                            <button onClick={() => setIsHistoryOpen(true)} className="flex items-center space-x-2 bg-white/80 border px-4 py-2 rounded-xl hover:bg-white transition-all shadow-sm">
+                                <Icons.Clock className="w-4 h-4 text-slate-500" />
+                                <span className="text-sm font-semibold text-slate-700">历史记录</span>
+                            </button>
+                            <button onClick={() => setIsSettingsOpen(true)} className="flex items-center space-x-2 bg-white/80 border px-4 py-2 rounded-xl hover:bg-white transition-all shadow-sm">
+                                <div className={`w-2.5 h-2.5 rounded-full ${settings.apiKey ? 'bg-emerald-500' : 'bg-amber-400'}`}></div>
+                                <span className="text-sm font-semibold text-slate-700">{settings.provider}</span>
+                                <Icons.Settings className="w-4 h-4 text-slate-500" />
+                            </button>
+                        </div>
+                    </header>
+
+                    <div className="flex flex-1 overflow-hidden p-4 gap-4 h-[calc(100vh-76px)]">
+                        <div className="w-[420px] glass-sidebar rounded-3xl border shadow-sm flex flex-col z-20 overflow-hidden flex-shrink-0">
+                            <div className="p-5 border-b bg-white/40 flex items-center"><Icons.Zap className="w-5 h-5 text-blue-500 mr-2" /><h2 className="font-bold text-slate-800 text-lg">AI 硬件架构师</h2></div>
+                            <div className="flex-1 overflow-y-auto p-5 space-y-6 bg-white/20">
+                                {messages.length === 0 && (
+                                    <div className="text-center mt-16 px-4">
+                                        <div className="bg-indigo-50 text-indigo-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 border"><Icons.Bot className="w-8 h-8" /></div>
+                                        <h3 className="font-bold text-slate-800 text-lg mb-2">描述您的硬件需求</h3>
+                                        <p className="text-sm text-slate-500 font-medium">例如："帮我设计一个用 ESP32 控制的智能植物浇水系统"</p>
+                                    </div>
+                                )}
+                                {messages.map((m, i) => (
+                                    <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} fade-in`}>
+                                        <div className={`max-w-[85%] rounded-2xl px-5 py-3.5 text-sm shadow-sm ${m.role === 'user' ? 'bg-gradient-to-br from-indigo-600 to-cyan-600 text-white rounded-br-sm font-medium' : 'bg-white border border-slate-100 text-slate-700 rounded-bl-sm leading-relaxed shadow-sm'}`}>
+                                            {m.content}
+                                        </div>
+                                    </div>
+                                ))}
+                                {isLoading && (
+                                    <div className="flex justify-start fade-in">
+                                        <div className="bg-white border border-slate-100 rounded-2xl rounded-bl-sm px-5 py-3.5 shadow-sm flex items-center space-x-3 text-slate-500 text-sm font-medium">
+                                            <Icons.Loader className="w-4 h-4 text-indigo-500" />
+                                            <span className="animate-pulse">正在生成硬件架构...</span>
+                                        </div>
+                                    </div>
+                                )}
+                                <div ref={chatEndRef} />
+                            </div>
+                            <form onSubmit={handleSubmit} className="p-4 bg-white/60 backdrop-blur-md border-t">
+                                <div className="relative flex items-end bg-white border rounded-2xl focus-within:ring-4 ring-indigo-500/20 focus-within:border-indigo-400 transition-all shadow-sm">
+                                    <textarea
+                                        value={input}
+                                        onChange={e => setInput(e.target.value)}
+                                        placeholder="输入您的需求..."
+                                        className="w-full bg-transparent p-4 pr-12 text-sm focus:outline-none resize-none min-h-[50px] max-h-[120px] font-medium text-slate-700"
+                                        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(e); } }}
+                                    />
+                                    <button type="submit" disabled={!input.trim() || isLoading} className="absolute right-2 bottom-2 p-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-40 transition-all shadow-md shadow-indigo-600/20">
+                                        <Icons.Send className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        {/* Right Panel: Content */}
+                        <div className="flex-1 flex flex-col min-w-0 glass-panel rounded-3xl border shadow-sm overflow-hidden z-10 relative">
+                            <div className="flex items-center px-6 py-3 border-b bg-white/50 space-x-2">
+                                <div className="flex bg-slate-100 p-1.5 rounded-2xl border">
+                                    {[
+                                        { id: 'circuit', icon: Icons.Zap, label: '实物接线图' },
+                                        { id: 'bom', icon: Icons.Package, label: 'BOM 清单' },
+                                        { id: '3d', icon: Icons.Box, label: '3D PCB' },
+                                        { id: 'guide', icon: Icons.Book, label: '说明书' },
+                                        { id: 'firmware', icon: Icons.Code, label: '固件代码' },
+                                        { id: 'code', icon: Icons.Settings, label: 'JSON' }
+                                    ].map(tab => (
+                                        <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center px-4 py-2 text-sm font-semibold rounded-xl transition-all ${activeTab === tab.id ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                                            <tab.icon className="w-4 h-4 mr-1.5" /> {tab.label}
+                                        </button>
+                                    ))}
+                                </div>
+                                {parsedData && <div className="ml-auto text-sm font-bold text-emerald-600 flex items-center bg-emerald-50 border border-emerald-100 px-4 py-2 rounded-xl"><Icons.Check className="w-4 h-4 mr-1.5"/> {parsedData.project_name}</div>}
+                            </div>
+                            <div className="flex-1 overflow-hidden relative bg-slate-50/30">
+                                {activeTab === 'circuit' && <CircuitDiagram data={parsedData?.circuit} />}
+                                {activeTab === 'bom' && <BOMTable data={parsedData?.bom} />}
+                                {activeTab === '3d' && <Model3D data={parsedData?.circuit} />}
+                                {activeTab === 'guide' && (
+                                    <div className="w-full h-full bg-white overflow-hidden flex fade-in text-slate-800">
+                                        {/* 左侧：详细文字说明书 */}
+                                        <div className="flex-1 h-full overflow-auto p-8 border-r border-slate-100">
+                                            <div className="max-w-2xl mx-auto space-y-6 pb-20">
+                                                <div className="flex items-center space-x-3 mb-8 border-b pb-4">
+                                                    <div className="bg-indigo-100 p-2.5 rounded-xl text-indigo-600"><Icons.Book className="w-6 h-6" /></div>
+                                                    <h2 className="text-2xl font-black text-slate-800 tracking-tight">新手保姆级教程</h2>
+                                                </div>
+                                                {parsedData?.guide ? (
+                                                    <div className="prose-custom max-w-none">
+                                                        {parsedData.guide.split('\n').map((line, i) => {
+                                                            const renderBold = (text) => {
+                                                                const parts = text.split(/\*\*(.*?)\*\*/g);
+                                                                return parts.map((part, idx) => idx % 2 === 1 ? <strong key={idx} className="text-slate-900 font-bold bg-indigo-50 px-1 rounded">{part}</strong> : part);
+                                                            };
+                                                            if (line.startsWith('### ')) return <h3 key={i} className="text-xl font-bold mt-8 mb-4 text-slate-800 flex items-center">{line.replace('### ', '')}</h3>;
+                                                            if (line.startsWith('#### ')) return <h4 key={i} className="text-lg font-bold mt-8 mb-4 text-indigo-700 flex items-center border-l-4 border-indigo-500 pl-3 bg-indigo-50/50 py-1.5 rounded-r-lg shadow-sm">{line.replace('#### ', '')}</h4>;
+                                                            if (line.match(/^\d+\.\s/)) return <div key={i} className="ml-2 mb-3 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-100 hover:shadow-md transition-shadow duration-300"><span className="font-black text-lg text-indigo-500 mr-2">{line.match(/^\d+\./)[0]}</span>{renderBold(line.replace(/^\d+\.\s/, ''))}</div>;
+                                                            if (line.startsWith('- ')) return <li key={i} className="ml-6 mb-2 text-slate-700 list-disc font-medium">{renderBold(line.replace('- ', ''))}</li>;
+                                                            if (line.trim() === '') return <div key={i} className="h-3"></div>;
+                                                            return <p key={i} className="mb-3 leading-relaxed text-slate-700 font-medium">{renderBold(line)}</p>;
+                                                        })}
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+                                                        <Icons.Book className="w-12 h-12 mb-4 opacity-50" />
+                                                        <p className="font-medium">等待 AI 硬件专家为您撰写专属说明书...</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* 右侧：视频指导侧边栏 (已精简，专注视频) */}
+                                        <div className="w-[380px] min-w-[380px] bg-slate-50 h-full overflow-y-auto p-6 flex-shrink-0 flex flex-col space-y-6 border-l border-slate-200 shadow-inner">
+                                            <div className="flex items-center space-x-2 border-b border-slate-200 pb-3">
+                                                <div className="bg-red-100 p-1.5 rounded-lg text-red-500">
+                                                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zm-10.615 12.816v-8l8 3.993-8 4.007z"/></svg>
+                                                </div>
+                                                <h3 className="text-lg font-bold text-slate-800">真实装配视频指导</h3>
+                                            </div>
+
+                                            {/* AI语音交互真实视频播放器 */}
+                                            <TutorialVideo projectData={parsedData} />
+                                            
+                                            <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl">
+                                                <h4 className="text-sm font-bold text-blue-800 mb-1 flex items-center"><Icons.Check className="w-4 h-4 mr-1"/> 温馨提示</h4>
+                                                <p className="text-xs text-blue-600 leading-relaxed">点击上方播放按钮，观看实拍工程师焊接视频，并聆听 AI 为您定制的装配避坑语音解说。</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                                {activeTab === 'firmware' && (
+                                    <div className="h-full bg-[#1e1e1e] text-[#d4d4d4] p-6 overflow-auto font-mono text-sm relative group">
+                                        {parsedData?.firmware_code && (
+                                            <button onClick={() => handleCopyCode(parsedData.firmware_code)} className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center transition-all opacity-0 group-hover:opacity-100">
+                                                {copySuccess ? <><Icons.Check className="w-3.5 h-3.5 mr-1 text-emerald-400" /> 已复制</> : <><Icons.Copy className="w-3.5 h-3.5 mr-1" /> 复制代码</>}
+                                            </button>
+                                        )}
+                                        <pre className="whitespace-pre-wrap">{parsedData?.firmware_code || '// 该硬件设计不包含微控制器，或正在等待 AI 生成代码...'}</pre>
+                                    </div>
+                                )}
+                                {activeTab === 'code' && (
+                                    <div className="h-full bg-[#0f172a] text-[#38bdf8] p-6 overflow-auto font-mono text-xs relative group">
+                                        {parsedData && (
+                                            <button onClick={() => handleCopyCode(JSON.stringify(parsedData, null, 2))} className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center transition-all opacity-0 group-hover:opacity-100">
+                                                {copySuccess ? <><Icons.Check className="w-3.5 h-3.5 mr-1 text-emerald-400" /> 已复制</> : <><Icons.Copy className="w-3.5 h-3.5 mr-1" /> 复制 JSON</>}
+                                            </button>
+                                        )}
+                                        <pre>{parsedData ? JSON.stringify(parsedData, null, 2) : '// 正在等待生成...'}</pre>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} settings={settings} setSettings={setSettings} />
+                    <HistoryModal isOpen={isHistoryOpen} onClose={() => setIsHistoryOpen(false)} history={history} onLoad={(item) => { setMessages(item.messages); setParsedData(item.parsedData); setIsHistoryOpen(false); }} onDelete={(id) => { setHistory(prev => prev.filter(h => h.id !== id)); fetch(`/api/history/${id}`, { method: 'DELETE' }).catch(err => console.error('删除历史失败:', err)); }} />
+                </div>
+            );
+        };
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
